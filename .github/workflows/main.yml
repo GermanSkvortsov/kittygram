@@ -119,14 +119,6 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           source: "./docker-compose.production.yml"
           target: "kittygram"
-      - name: Copy .env via ssh
-        uses: appleboy/scp-action@master
-        with:
-          host: ${{ secrets.HOST }}
-          username: ${{ secrets.USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: ".env"
-          target: "kittygram"
       - name: Deploy on server
         uses: appleboy/ssh-action@master
         with:
