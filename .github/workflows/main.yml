@@ -8,13 +8,16 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
     services:
       postgres:
         image: postgres:13.10
         env:
-          POSTGRES_USER: kittygram_user
-          POSTGRES_PASSWORD: kittygram_password
-          POSTGRES_DB: kittygram
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
         ports:
           - 5432:5432
         options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
@@ -23,7 +26,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.12
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           pip install flake8 flake8-isort
@@ -32,9 +35,9 @@ jobs:
         run: flake8 backend/
       - name: Django tests
         env:
-          POSTGRES_USER: kittygram_user
-          POSTGRES_PASSWORD: kittygram_password
-          POSTGRES_DB: kittygram
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
           DB_HOST: 127.0.0.1
           DB_PORT: 5432
         run: |
@@ -127,12 +130,30 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             cd kittygram
+            
+            # Создаем .env файл
+            cat > .env << EOF
+            POSTGRES_DB=${{ secrets.POSTGRES_DB }}
+            POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            
+            DB_NAME=${{ secrets.POSTGRES_DB }}
+            DB_USER=${{ secrets.POSTGRES_USER }}
+            DB_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            DB_HOST=db
+            DB_PORT=5432
+            
+            SECRET_KEY=${{ secrets.DJANGO_SECRET_KEY }}
+            DEBUG=False
+            ALLOWED_HOSTS=${{ secrets.ALLOWED_HOSTS }}
+            EOF
+            
             sudo docker compose -f docker-compose.production.yml pull
             sudo docker compose -f docker-compose.production.yml down
             sudo docker compose -f docker-compose.production.yml up -d
+            sleep 10
             sudo docker compose -f docker-compose.production.yml exec backend python manage.py migrate
             sudo docker compose -f docker-compose.production.yml exec backend python manage.py collectstatic --noinput
-            sudo docker compose -f docker-compose.production.yml exec backend cp -r /app/static_backend/. /backend_static/static/
 
   send_message:
     runs-on: ubuntu-latest
@@ -144,6 +165,9 @@ jobs:
           to: ${{ secrets.TELEGRAM_TO }}
           token: ${{ secrets.TELEGRAM_TOKEN }}
           message: |
-            🐱 Деплой Kittygram успешно выполнен!
-            📦 Образы обновлены на Docker Hub
-            🌐 Сайт: https://kittygram-test.mooo.com
+            Деплой Kittygram успешно выполнен
+            
+            Автор: ${{ github.actor }}
+            Коммит: ${{ github.event.commits[0].message }}
+            Ссылка: https://github.com/${{ github.repository }}/commit/${{ github.sha }}
+            Сайт: ${{ secrets.KITTYGRAM_DOMAIN }}
